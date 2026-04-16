@@ -1,0 +1,5 @@
+y_data.mat
+*.pyc
+__pycache__/
+output/spectrogram_art.png
+output/shannon_10s.wav

@@ -1,0 +1,6 @@
+FROM nginx:alpine
+COPY index.html /usr/share/nginx/html/
+COPY output/spectrogram_*.png /usr/share/nginx/html/output/
+COPY output/shannon_10s_1750hz.wav /usr/share/nginx/html/output/
+COPY assets/ /usr/share/nginx/html/assets/
+EXPOSE 80

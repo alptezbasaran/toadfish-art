@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Toadfish Art — Underwater Spectrogram</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      color: #ccc;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
+    }
+
+    /* --- Full-screen spectrogram --- */
+    #spectrogram-wrap {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1;
+    }
+    #spectrogram {
+      display: block;
+      max-width: 100vw;
+      max-height: 100vh;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    /* --- QR overlay (desktop only) --- */
+    #qrOverlay {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 30;
+      padding: 6px;
+      border-radius: 12px;
+      background: #e5e5e5;
+      border: 1px solid rgba(0,0,0,0.18);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+    #qrOverlay img {
+      display: block;
+      width: 120px;
+      height: 120px;
+      background: #e5e5e5;
+    }
+    @media (max-width: 640px) {
+      #qrOverlay { display: none; }
+    }
+
+    /* --- Icon controls --- */
+    #controls {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 10;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .icon-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.1);
+      transition: all 0.2s ease;
+      padding: 0;
+      outline: none;
+    }
+    .icon-btn svg {
+      width: 22px;
+      height: 22px;
+      fill: rgba(255,255,255,0.75);
+      transition: fill 0.2s ease;
+    }
+    .icon-btn:hover {
+      background: rgba(0,0,0,0.7);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.2);
+      transform: scale(1.08);
+    }
+    .icon-btn:hover svg { fill: #fff; }
+    .icon-btn.active {
+      background: rgba(255,255,255,0.15);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5), inset 0 0 0 1.5px rgba(255,255,255,0.35);
+    }
+    .icon-btn.active svg { fill: #fff; }
+
+    /* Tooltip */
+    .icon-btn::after {
+      content: attr(aria-label);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 5px 10px;
+      border-radius: 6px;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(8px);
+      color: #ddd;
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+    .icon-btn:hover::after { opacity: 1; }
+
+    /* Play button larger */
+    #playBtn {
+      width: 56px;
+      height: 56px;
+    }
+    #playBtn svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    /* --- Colormap dropdown --- */
+    .dropdown-wrap {
+      position: relative;
+    }
+    #cmapMenu {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      right: 0;
+      min-width: 160px;
+      max-height: 340px;
+      overflow-y: auto;
+      background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 6px;
+      display: none;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    }
+    #cmapMenu.open { display: block; }
+    #cmapMenu button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: rgba(255,255,255,0.7);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      cursor: pointer;
+      transition: all 0.12s ease;
+      text-align: left;
+    }
+    #cmapMenu button:hover {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+    }
+    #cmapMenu button.active {
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      font-weight: 500;
+    }
+    .cmap-swatch {
+      width: 28px;
+      height: 14px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    #cmapMenu::-webkit-scrollbar { width: 6px; }
+    #cmapMenu::-webkit-scrollbar-track { background: transparent; }
+    #cmapMenu::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.15);
+      border-radius: 3px;
+    }
+
+    /* --- Info modal --- */
+    #modal {
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      overflow-y: auto;
+      display: none;
+      align-items: flex-start; justify-content: center;
+      padding: 40px 20px;
+    }
+    #modal.open { display: flex; }
+    #modalContent {
+      max-width: 680px; width: 100%;
+      background: rgba(12,12,12,0.95);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 48px 48px 56px;
+      position: relative;
+      color: #bbb;
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: 17px;
+      line-height: 1.8;
+    }
+    #modalClose {
+      position: absolute; top: 16px; right: 16px;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,0.06);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    #modalClose:hover { background: rgba(255,255,255,0.12); }
+    #modalClose svg { width: 16px; height: 16px; fill: rgba(255,255,255,0.6); }
+    #modalContent h1 {
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-top: 0; margin-bottom: 4px;
+    }
+    #modalContent .subtitle {
+      color: #888;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: 0.02em;
+      margin-bottom: 28px;
+    }
+    #modalContent h2 {
+      color: #ddd;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 36px; margin-bottom: 12px;
+      padding-top: 28px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    #modalContent p { margin: 14px 0; }
+    #modalContent em { font-style: italic; color: #d0d0d0; }
+    #modalContent img {
+      display: block;
+      width: 100%;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    #modalContent .img-caption {
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+      margin-top: -12px;
+      margin-bottom: 20px;
+    }
+    #modalContent a {
+      color: #7eb8da;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(126,184,218,0.3);
+      transition: border-color 0.15s;
+    }
+    #modalContent a:hover {
+      color: #aed4ee;
+      border-bottom-color: rgba(174,212,238,0.6);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Spectrogram full-screen -->
+  <div id="spectrogram-wrap">
+    <img id="spectrogram" src="output/spectrogram_inferno.png" alt="Underwater spectrogram of toadfish and reef sounds" />
+  </div>
+
+  <!-- QR code overlay -->
+  <div id="qrOverlay" aria-hidden="true">
+    <img src="assets/qr.svg" alt="" />
+  </div>
+
+  <!-- Controls -->
+  <div id="controls">
+    <button class="icon-btn" id="infoBtn" type="button" aria-label="About this piece">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+    </button>
+    <div class="dropdown-wrap">
+      <button class="icon-btn" id="cmapBtn" type="button" aria-label="Colormap">
+        <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-1 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+      </button>
+      <div id="cmapMenu"></div>
+    </div>
+    <button class="icon-btn" id="loopBtn" type="button" aria-label="Loop">
+      <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+    </button>
+    <button class="icon-btn" id="playBtn" type="button" aria-label="Play">
+      <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <svg id="pauseIcon" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+    </button>
+  </div>
+
+  <!-- Info modal -->
+  <div id="modal" role="dialog" aria-modal="true" aria-label="About this piece">
+    <div id="modalContent">
+      <button id="modalClose" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
+
+      <h1>2026 Libraries Art Show</h1>
+      <p class="subtitle">Shannon Ricci</p>
+
+      <h2>What am I looking at?</h2>
+      <p>This is a spectrogram of underwater sound recorded at a site within the Florida Keys National Marine Sanctuary. This is a ten second recording, with the colors showing how loud the sound is, with brighter yellow colors being louder sounds, and cooler blue colors being quieter sounds. Sounds in the upper part of the image are higher frequency (higher pitch) sounds, and lower in the image are lower frequency (pitch) sounds.</p>
+
+      <img src="assets/t_FK03_20190130014756_d10s.jpg" alt="Spectrogram of underwater sound" />
+      <p class="img-caption">Spectrogram of the 10-second underwater recording</p>
+
+      <p>Part of my research is to identify the different fish calls in these sound recordings. Here, the focus is on the call of the leopard toadfish, <em>Opsanus pardus</em>, a bottom-dwelling fish that lives in the crevices of the reef structure and produces a &ldquo;boatwhistle&rdquo; call to attract mates. In this image, we also see the call of another fish, the red hind, <em>Epinephelus guttatus</em>, another reef-dwelling fish in the grouper family. While not the target of my research, it shows the diversity of biological sounds that we can observe in a short sound clip.</p>
+
+      <img src="assets/annotated_t_FK03_20190130014756_d10s.jpg" alt="Annotated spectrogram with detected fish calls" />
+      <p class="img-caption">Detected fish calls with confidence scores &mdash; toadfish boatwhistles and red hind calls</p>
+
+      <h2>Learn more</h2>
+      <p>For more information on the SanctSound project, visit <a href="https://sanctsound.ioos.us/s_fknms.html" target="_blank" rel="noopener">sanctsound.ioos.us</a></p>
+      <p>For more information on fish call detection, see <a href="https://doi.org/10.1371/journal.pone.0182757" target="_blank" rel="noopener">doi.org/10.1371/journal.pone.0182757</a></p>
+    </div>
+  </div>
+
+  <!-- Audio element -->
+  <audio id="audio" preload="auto">
+    <source src="output/shannon_10s_1750hz.wav" type="audio/wav" />
+  </audio>
+
+  <script>
+    const audio      = document.getElementById('audio');
+    const playBtn    = document.getElementById('playBtn');
+    const playIcon   = document.getElementById('playIcon');
+    const pauseIcon  = document.getElementById('pauseIcon');
+    const loopBtn    = document.getElementById('loopBtn');
+    const infoBtn    = document.getElementById('infoBtn');
+    const cmapBtn    = document.getElementById('cmapBtn');
+    const cmapMenu   = document.getElementById('cmapMenu');
+    const specImg    = document.getElementById('spectrogram');
+    const modal      = document.getElementById('modal');
+    const modalClose = document.getElementById('modalClose');
+
+    // --- Colormaps ---
+    const CMAPS = [
+      { id: 'inferno',   label: 'Inferno',   colors: ['#000004','#420a68','#932667','#dd513a','#fca50a','#fcffa4'] },
+      { id: 'magma',     label: 'Magma',     colors: ['#000004','#3b0f70','#8c2981','#de4968','#fe9f6d','#fcfdbf'] },
+      { id: 'plasma',    label: 'Plasma',    colors: ['#0d0887','#6a00a8','#b12a90','#e16462','#fca636','#f0f921'] },
+      { id: 'viridis',   label: 'Viridis',   colors: ['#440154','#414487','#2a788e','#22a884','#7ad151','#fde725'] },
+      { id: 'cividis',   label: 'Cividis',   colors: ['#002051','#3c4d6e','#72776f','#a9a258','#e0cd3e','#fdea45'] },
+      { id: 'turbo',     label: 'Turbo',     colors: ['#30123b','#4662d7','#36aaf9','#1ae4b6','#72fe5e','#faba39','#e6550d','#7a0403'] },
+      { id: 'hot',       label: 'Hot',       colors: ['#000000','#8b0000','#ff4500','#ffa500','#ffff00','#ffffff'] },
+      { id: 'copper',    label: 'Copper',    colors: ['#000000','#4e2e0b','#9c5c16','#c88838','#e8b878','#ffd8a8'] },
+      { id: 'bone',      label: 'Bone',      colors: ['#000000','#2a2a3a','#545470','#7a8c8c','#a8c4c4','#ffffff'] },
+      { id: 'ocean',     label: 'Ocean',     colors: ['#006400','#003200','#000064','#0000c8','#0064c8','#ffffff'] },
+      { id: 'cubehelix', label: 'Cubehelix', colors: ['#000000','#1a1530','#163d4e','#38784c','#92793a','#c87898','#b8c4e0','#ffffff'] },
+      { id: 'twilight',  label: 'Twilight',  colors: ['#e2d9e2','#6e5c9e','#1e1e54','#1e1e54','#6e5c9e','#e2d9e2'] },
+      { id: 'coolwarm',  label: 'Cool-Warm', colors: ['#3b4cc0','#7092e5','#b5c6f4','#f1cfca','#e58873','#b40426'] },
+      { id: 'gnuplot2',  label: 'GnuPlot2',  colors: ['#000000','#0000c0','#4000ff','#8040ff','#c08040','#ffff00','#ffffff'] },
+      { id: 'gray',      label: 'Grayscale', colors: ['#000000','#404040','#808080','#c0c0c0','#ffffff'] },
+      { id: 'pink',      label: 'Pink',      colors: ['#1e0000','#5e3030','#8b6060','#b09090','#d0b8b8','#ffe0e0'] },
+    ];
+
+    let activeCmap = 'inferno';
+
+    // Build menu
+    CMAPS.forEach(cm => {
+      const btn = document.createElement('button');
+      btn.dataset.cmap = cm.id;
+      if (cm.id === activeCmap) btn.classList.add('active');
+
+      const swatch = document.createElement('span');
+      swatch.className = 'cmap-swatch';
+      swatch.style.background = `linear-gradient(90deg, ${cm.colors.join(', ')})`;
+
+      const label = document.createElement('span');
+      label.textContent = cm.label;
+
+      btn.appendChild(swatch);
+      btn.appendChild(label);
+      cmapMenu.appendChild(btn);
+    });
+
+    cmapBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      cmapMenu.classList.toggle('open');
+    });
+
+    cmapMenu.addEventListener('click', e => {
+      const btn = e.target.closest('button[data-cmap]');
+      if (!btn) return;
+      const id = btn.dataset.cmap;
+      if (id === activeCmap) { cmapMenu.classList.remove('open'); return; }
+
+      activeCmap = id;
+      specImg.src = `output/spectrogram_${id}.png`;
+      cmapMenu.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.cmap === id));
+      cmapMenu.classList.remove('open');
+    });
+
+    document.addEventListener('click', () => { cmapMenu.classList.remove('open'); });
+
+    // --- Play / Pause ---
+    function setPlaying(playing) {
+      playIcon.style.display  = playing ? 'none' : '';
+      pauseIcon.style.display = playing ? '' : 'none';
+      playBtn.classList.toggle('active', playing);
+      playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    }
+
+    playBtn.addEventListener('click', () => {
+      if (audio.paused) {
+        audio.play();
+        setPlaying(true);
+      } else {
+        audio.pause();
+        setPlaying(false);
+      }
+    });
+
+    audio.addEventListener('ended', () => {
+      if (!audio.loop) setPlaying(false);
+    });
+
+    // --- Loop ---
+    loopBtn.addEventListener('click', () => {
+      audio.loop = !audio.loop;
+      loopBtn.classList.toggle('active', audio.loop);
+      loopBtn.setAttribute('aria-label', audio.loop ? 'Loop: On' : 'Loop: Off');
+    });
+
+    // --- Info modal ---
+    infoBtn.addEventListener('click', () => { modal.classList.add('open'); });
+    modalClose.addEventListener('click', () => { modal.classList.remove('open'); });
+    modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') modal.classList.remove('open'); });
+  </script>
+</body>
+</html>
